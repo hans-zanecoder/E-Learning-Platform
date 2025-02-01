@@ -24,20 +24,26 @@ export async function POST(req: Request) {
     }
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
     }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
     }
 
     // Generate JWT
     const token = signJWT({
       id: user._id,
       email: user.email,
-      role: user.role
+      role: user.role,
     });
 
     return NextResponse.json({
@@ -47,10 +53,9 @@ export async function POST(req: Request) {
         username: user.username,
         email: user.email,
         role: user.role,
-      }
+      },
     });
-
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

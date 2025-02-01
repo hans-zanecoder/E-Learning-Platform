@@ -14,15 +14,20 @@ export async function POST(req: Request) {
     const collections = {
       student: Student,
       teacher: Teacher,
-      admin: Admin
+      admin: Admin,
     };
 
-    const userExists = await collections[role as keyof typeof collections].findOne({ 
-      $or: [{ email }, { username }] 
+    const userExists = await collections[
+      role as keyof typeof collections
+    ].findOne({
+      $or: [{ email }, { username }],
     });
 
     if (userExists) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'User already exists' },
+        { status: 400 }
+      );
     }
 
     // Create user in appropriate collection
@@ -31,7 +36,7 @@ export async function POST(req: Request) {
       username,
       email,
       password,
-      role
+      role,
     });
 
     await user.save();
@@ -40,7 +45,7 @@ export async function POST(req: Request) {
     const token = signJWT({
       id: user._id,
       email: user.email,
-      role: user.role
+      role: user.role,
     });
 
     return NextResponse.json({
@@ -50,11 +55,13 @@ export async function POST(req: Request) {
         username: user.username,
         email: user.email,
         role: user.role,
-      }
+      },
     });
-
   } catch (error: any) {
     console.error('Registration error:', error);
-    return NextResponse.json({ error: error.message || 'Registration failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Registration failed' },
+      { status: 500 }
+    );
   }
 }

@@ -14,15 +14,16 @@ export const signJWT = (payload: any) => {
 
 export const verifyJWT = async (token: string) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; role: string };
-    
-    if (decoded.role === 'admin' || decoded.role === 'teacher') {
-      // Check in appropriate collection based on role
-      const Model = decoded.role === 'admin' ? Admin : Teacher;
-      const user = await Model.findById(decoded.id);
-      return user;
-    }
-    return null;
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      role: string;
+    };
+
+    // Return the decoded token information directly
+    return {
+      id: decoded.id,
+      role: decoded.role,
+    };
   } catch (error) {
     return null;
   }

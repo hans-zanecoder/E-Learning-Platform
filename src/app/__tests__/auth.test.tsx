@@ -6,17 +6,17 @@ import '@testing-library/jest-dom';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
-  useRouter: jest.fn()
+  useRouter: jest.fn(),
 }));
 
 // Mock SweetAlert2
 jest.mock('sweetalert2', () => ({
-  fire: jest.fn()
+  fire: jest.fn(),
 }));
 
-describe('Authentication Tests', () => {
+describe('Authentication', () => {
   const mockRouter = {
-    push: jest.fn()
+    push: jest.fn(),
   };
 
   beforeEach(() => {
@@ -31,31 +31,34 @@ describe('Authentication Tests', () => {
       render(<Login />);
       expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /sign in/i })
+      ).toBeInTheDocument();
     });
 
     it('handles successful login when button is clicked', async () => {
       const mockResponse = {
         ok: true,
-        json: () => Promise.resolve({
-          token: 'fake-token',
-          user: {
-            id: '1',
-            username: 'testuser',
-            email: 'test@example.com',
-            role: 'student'
-          }
-        })
+        json: () =>
+          Promise.resolve({
+            token: 'fake-token',
+            user: {
+              id: '1',
+              username: 'testuser',
+              email: 'test@example.com',
+              role: 'student',
+            },
+          }),
       };
 
       global.fetch = jest.fn().mockResolvedValueOnce(mockResponse as Response);
       render(<Login />);
 
       fireEvent.change(screen.getByLabelText(/email address/i), {
-        target: { value: 'test@example.com' }
+        target: { value: 'test@example.com' },
       });
       fireEvent.change(screen.getByLabelText(/password/i), {
-        target: { value: 'password123' }
+        target: { value: 'password123' },
       });
 
       fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
@@ -68,17 +71,17 @@ describe('Authentication Tests', () => {
     it('handles login failure', async () => {
       const mockResponse = {
         ok: false,
-        json: () => Promise.resolve({ error: 'Invalid credentials' })
+        json: () => Promise.resolve({ error: 'Invalid credentials' }),
       };
 
       global.fetch = jest.fn().mockResolvedValueOnce(mockResponse as Response);
       render(<Login />);
 
       fireEvent.change(screen.getByLabelText(/email address/i), {
-        target: { value: 'wrong@example.com' }
+        target: { value: 'wrong@example.com' },
       });
       fireEvent.change(screen.getByLabelText(/password/i), {
-        target: { value: 'wrongpassword' }
+        target: { value: 'wrongpassword' },
       });
 
       fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
@@ -93,49 +96,59 @@ describe('Authentication Tests', () => {
   describe('Register Page', () => {
     it('renders register form', () => {
       render(<Register />);
-      
-      expect(screen.getByRole('textbox', { name: /username/i })).toBeInTheDocument();
-      expect(screen.getByRole('textbox', { name: /email address/i })).toBeInTheDocument();
+
+      expect(
+        screen.getByRole('textbox', { name: /username/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('textbox', { name: /email address/i })
+      ).toBeInTheDocument();
       expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /sign up/i })
+      ).toBeInTheDocument();
     });
 
     it('handles successful registration when button is clicked', async () => {
       const mockResponse = {
         ok: true,
-        json: () => Promise.resolve({
-          token: 'fake-token',
-          user: {
-            id: '1',
-            username: 'newuser',
-            email: 'new@example.com',
-            role: 'student'
-          }
-        })
+        json: () =>
+          Promise.resolve({
+            token: 'fake-token',
+            user: {
+              id: '1',
+              username: 'newuser',
+              email: 'new@example.com',
+              role: 'student',
+            },
+          }),
       };
 
       global.fetch = jest.fn().mockResolvedValueOnce(mockResponse as Response);
       render(<Register />);
 
       fireEvent.change(screen.getByLabelText(/username/i), {
-        target: { value: 'newuser' }
+        target: { value: 'newuser' },
       });
       fireEvent.change(screen.getByLabelText(/email address/i), {
-        target: { value: 'new@example.com' }
+        target: { value: 'new@example.com' },
       });
       fireEvent.change(screen.getByLabelText(/^password$/i), {
-        target: { value: 'password123' }
+        target: { value: 'password123' },
       });
       fireEvent.change(screen.getByLabelText(/confirm password/i), {
-        target: { value: 'password123' }
+        target: { value: 'password123' },
       });
 
       fireEvent.click(screen.getByRole('button', { name: /sign up/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/auth/register', expect.any(Object));
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/auth/register',
+          expect.any(Object)
+        );
       });
     });
   });
-}); 
+});

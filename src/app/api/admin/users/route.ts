@@ -18,10 +18,10 @@ export async function GET(req: Request) {
     }
 
     await connectDB();
-    
+
     const students = await Student.find({}, '-password');
     const teachers = await Teacher.find({}, '-password');
-    
+
     return NextResponse.json({ users: [...students, ...teachers] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -51,4 +51,4 @@ export async function DELETE(req: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

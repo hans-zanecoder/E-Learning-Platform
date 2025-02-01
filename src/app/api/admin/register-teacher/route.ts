@@ -7,26 +7,34 @@ export async function POST(req: Request) {
   try {
     await connectDB();
 
-    const token = req.headers.get('authorization')?.split(' ')[1];
+    const authHeader =
+      req.headers.get('Authorization') || req.headers.get('authorization');
+    const token = authHeader?.split(' ')[1];
+
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await verifyJWT(token);
-    // Allow only admin and teacher roles
-    if (!user || (user.role !== 'admin' && user.role !== 'teacher')) {
+    const decodedUser = await verifyJWT(token);
+    const ADMIN_ROLE = 'admin';
+
+    if (!decodedUser || decodedUser.role !== ADMIN_ROLE) {
+      //will remove this console log later
+      console.log('Unauthorized user:', decodedUser); // For debugging
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { username, email, password, fullName, course } = await req.json();
+    const { username, email, password, fullName, courses } = await req.json();
 
-    // Check if teacher already exists
     const existingTeacher = await Teacher.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email }, { username }],
     });
 
     if (existingTeacher) {
-      return NextResponse.json({ error: 'Teacher already exists' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Teacher already exists' },
+        { status: 400 }
+      );
     }
 
     // Create new teacher
@@ -35,11 +43,13 @@ export async function POST(req: Request) {
       email,
       password,
       fullName,
-      course,
-      role: 'teacher'
+      courses,
+      role: 'teacher',
     });
 
     await newTeacher.save();
+
+    //will remove this console log later
     console.log('New teacher saved:', newTeacher);
 
     return NextResponse.json({
@@ -49,12 +59,11 @@ export async function POST(req: Request) {
         username: newTeacher.username,
         email: newTeacher.email,
         role: newTeacher.role,
-        course: newTeacher.course
-      }
+        courses: newTeacher.courses,
+      },
     });
-
   } catch (error: any) {
     console.error('Registration error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

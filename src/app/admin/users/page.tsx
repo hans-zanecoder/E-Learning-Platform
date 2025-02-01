@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
@@ -11,8 +11,8 @@ export default function UserManagement() {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/admin/users', {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -31,7 +31,7 @@ export default function UserManagement() {
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
         cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it!'
+        confirmButtonText: 'Yes, delete it!',
       });
 
       if (result.isConfirmed) {
@@ -39,10 +39,10 @@ export default function UserManagement() {
         const response = await fetch('/api/admin/users', {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ userId, role })
+          body: JSON.stringify({ userId, role }),
         });
 
         const data = await response.json();
@@ -61,37 +61,37 @@ export default function UserManagement() {
   }, []);
 
   return (
-      <div className="p-8">
-        <h1 className="text-2xl font-bold mb-6">User Management</h1>
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg">
-            <thead>
-              <tr>
-                <th className="px-6 py-3 border-b">Username</th>
-                <th className="px-6 py-3 border-b">Email</th>
-                <th className="px-6 py-3 border-b">Role</th>
-                <th className="px-6 py-3 border-b">Actions</th>
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-6">User Management</h1>
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg">
+          <thead>
+            <tr>
+              <th className="px-6 py-3 border-b">Username</th>
+              <th className="px-6 py-3 border-b">Email</th>
+              <th className="px-6 py-3 border-b">Role</th>
+              <th className="px-6 py-3 border-b">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user: any) => (
+              <tr key={user._id}>
+                <td className="px-6 py-4 border-b">{user.username}</td>
+                <td className="px-6 py-4 border-b">{user.email}</td>
+                <td className="px-6 py-4 border-b">{user.role}</td>
+                <td className="px-6 py-4 border-b">
+                  <button
+                    onClick={() => handleDelete(user._id, user.role)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {users.map((user: any) => (
-                <tr key={user._id}>
-                  <td className="px-6 py-4 border-b">{user.username}</td>
-                  <td className="px-6 py-4 border-b">{user.email}</td>
-                  <td className="px-6 py-4 border-b">{user.role}</td>
-                  <td className="px-6 py-4 border-b">
-                    <button
-                      onClick={() => handleDelete(user._id, user.role)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
+    </div>
   );
-} 
+}
