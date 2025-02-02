@@ -1,9 +1,35 @@
 import { NextResponse } from 'next/server';
-import { verifyJWT } from '@/app/lib/jwt';
 import connectDB from '@/app/lib/db';
-import Course, { ICourse } from '@/app/models/Course';
-import Student from '@/app/models/Student';
+import { verifyJWT } from '@/app/lib/jwt';
+import Course from '@/app/models/Course';
 import Enrollment from '@/app/models/Enrollment';
+import mongoose from 'mongoose';
+
+// Define Lesson Schema if not already registered
+const LessonSchema = new mongoose.Schema({
+  title: String,
+  content: String,
+  dueDate: Date,
+  studentProgress: [{
+    studentId: mongoose.Schema.Types.ObjectId,
+    completed: Boolean
+  }],
+  createdAt: Date
+});
+
+// Register the model only if it hasn't been registered
+const Lesson = mongoose.models.Lesson || mongoose.model('Lesson', LessonSchema);
+
+interface LessonType {
+  _id: string;
+  title: string;
+  content: string;
+  dueDate: Date;
+  studentProgress?: Array<{
+    studentId: string;
+    completed: boolean;
+  }>;
+}
 
 export async function GET(request: Request) {
   try {
@@ -19,32 +45,53 @@ export async function GET(request: Request) {
 
     await connectDB();
 
-    const student = await Student.findById(decoded.id);
-    if (!student) {
-      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-    }
-
-    const enrolledCourses = (await Course.find({
-      _id: { $in: student.enrolledCourses },
-    })
-      .populate('teachers', 'fullName email')
-      .select('title description category startDate endDate schedule teachers')
-      .lean()) as unknown as ICourse[];
-
+    // First get the student's enrollments
     const enrollments = await Enrollment.find({
-      studentId: student._id,
-      courseId: { $in: student.enrolledCourses },
+      studentId: decoded.id,
+      status: 'active'
     }).lean();
 
-    const coursesWithEnrollments = enrolledCourses.map((course) => ({
+    // Get the course IDs from enrollments
+    const courseIds = enrollments.map(enrollment => enrollment.courseId);
+
+    // Find all courses that the student is enrolled in
+    const enrolledCourses = await Course.find({
+      _id: { $in: courseIds }
+    })
+    .populate({
+      path: 'teacherId',
+      select: 'fullName email username',
+      model: 'Teacher'
+    })
+    .populate({
+      path: 'lessons',
+      select: 'title content dueDate studentProgress createdAt description',
+      model: 'Lesson'
+    })
+    .lean();
+
+    // Transform the courses data to include completion status
+    const coursesWithProgress = enrolledCourses.map(course => ({
       ...course,
-      enrollment: enrollments.find(
-        (e) => e.courseId.toString() === course._id.toString()
-      ),
+      lessons: course.lessons?.map((lesson: LessonType) => ({
+        ...lesson,
+        completed: lesson.studentProgress?.some(
+          progress => 
+            progress.studentId.toString() === decoded.id && 
+            progress.completed
+        ) || false
+      })) || []
     }));
 
-    return NextResponse.json({ courses: coursesWithEnrollments });
+    return NextResponse.json({ 
+      courses: coursesWithProgress 
+    });
+
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Error in enrolled-courses route:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

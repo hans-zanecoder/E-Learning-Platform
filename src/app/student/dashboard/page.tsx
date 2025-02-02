@@ -20,6 +20,7 @@ import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
 import CourseCalendar from '../components/CourseCalendar';
 import { Course } from '../types/course';
 import { Enrollment } from '../types/enrollment';
+import mongoose from 'mongoose';
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -79,18 +80,37 @@ export default function StudentDashboard() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-
+  
     if (!storedUser || !token) {
       router.push('/auth/login');
       return;
     }
-
+  
     const userData = JSON.parse(storedUser);
+    if (userData.role !== 'student') {
+      router.push('/auth/login');
+      return;
+    }
+  
     setUser(userData);
-
-    fetchEnrolledCourses();
-    fetchCourses();
-    fetchDashboardStats();
+  
+    // Fetch data
+    const fetchData = async () => {
+      try {
+        await Promise.all([
+          fetchEnrolledCourses(),
+          fetchCourses(),
+          fetchDashboardStats()
+        ]);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      }
+    };
+  
+    fetchData();
+  
+    const pollInterval = setInterval(fetchEnrolledCourses, 30000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   const fetchCourses = async () => {
@@ -101,8 +121,13 @@ export default function StudentDashboard() {
           Authorization: `Bearer ${token}`,
         },
       });
+      
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch courses');
+      }
+      
+      console.log('Fetched courses:', data);
       setCourses(data.courses);
     } catch (error: any) {
       console.error('Error fetching courses:', error);
@@ -196,24 +221,56 @@ export default function StudentDashboard() {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      if (!token || !storedUser) {
+        throw new Error('Authentication required');
+      }
+  
       const response = await fetch('/api/student/enrolled-courses', {
-        method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         cache: 'no-store',
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error);
-      }
-
+  
+      // Log the raw response for debugging
+      console.log('Response status:', response.status);
+  
       const data = await response.json();
-      setEnrolledCourses(data.courses);
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch enrolled courses');
+      }
+  
+      console.log('Enrolled courses data:', data);
+  
+      const formattedCourses = data.courses.map((course: any) => ({
+        _id: course._id,
+        title: course.title || course.name,
+        description: course.description,
+        teacherId: course.teacherId,
+        lessons: (course.lessons || []).map((lesson: any) => ({
+          _id: lesson._id,
+          title: lesson.title,
+          content: lesson.content,
+          dueDate: new Date(lesson.dueDate),
+          courseId: course._id,
+          courseName: course.title || course.name,
+          completed: lesson.completed || false,
+          createdAt: new Date(lesson.createdAt || Date.now())
+        }))
+      }));
+  
+      setEnrolledCourses(formattedCourses);
     } catch (error: any) {
-      console.error('Error fetching enrolled courses:', error);
+      console.error('Detailed error in fetchEnrolledCourses:', {
+        error,
+        message: error.message,
+        stack: error.stack
+      });
+      
       swalError(error, {
         defaultMessage: 'Failed to fetch enrolled courses'
       });
@@ -344,194 +401,107 @@ export default function StudentDashboard() {
   };
 
   const MyCourses = () => {
-    //will delete this console log later
-    console.log('Enrolled Courses:', enrolledCourses);
+    const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      const fetchEnrolledCourses = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch('/api/student/enrolled-courses', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch courses');
+          }
+
+          const data = await response.json();
+          setEnrolledCourses(data.courses || []);
+        } catch (error) {
+          console.error('Error fetching enrolled courses:', error);
+          setEnrolledCourses([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchEnrolledCourses();
+    }, []);
 
     if (loading) {
       return (
-        <div className="flex justify-center items-center min-h-[400px]">
+        <div className="flex justify-center items-center min-h-[200px]">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       );
     }
 
-    if (!enrolledCourses || enrolledCourses.length === 0) {
-      return (
-        <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400">
-            You haven't enrolled in any courses yet.
-          </p>
-          <button
-            onClick={() => setCurrentView('available-courses')}
-            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-          >
-            Browse Available Courses
-          </button>
-        </div>
-      );
-    }
-
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <div className="sm:flex sm:items-center sm:justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            My Enrolled Courses
-          </h2>
-          <div className="flex items-center mt-4 sm:mt-0">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={showCalendar}
-                onChange={(e) => setShowCalendar(e.target.checked)}
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-              <span className="ml-3 text-sm font-medium text-gray-900 dark:text-white">
-                {showCalendar ? 'Calendar View' : 'List View'}
-              </span>
-            </label>
-          </div>
-        </div>
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          My Enrolled Courses
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {enrolledCourses.map((course) => (
+            <div
+              key={course._id}
+              className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 flex flex-col h-full"
+            >
+              <div className="p-6 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
+                      {course.title}
+                    </h3>
+                  </div>
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    Active
+                  </span>
+                </div>
 
-        <div className="mb-6">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Total Enrolled Courses: {enrolledCourses.length}
-          </div>
-        </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                  {course.description || 'No description available'}
+                </p>
 
-        {showCalendar ? (
-          <div className="h-[600px]">
-            <CourseCalendar courses={enrolledCourses} />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {enrolledCourses.map((course) => (
-              <div
-                key={course._id}
-                className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600"
-              >
-                <div className="p-6">
+                <div className="mt-auto">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center">
-                      <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                        <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <h3 className="ml-3 text-lg font-medium text-gray-900 dark:text-white">
-                        {course.title}
-                      </h3>
-                    </div>
-                    {course.enrollment && (
-                      <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full ${
-                          course.enrollment.status === 'active'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : course.enrollment.status === 'completed'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}
-                      >
-                        {course.enrollment.status.charAt(0).toUpperCase() +
-                          course.enrollment.status.slice(1)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    {course.description?.substring(0, 100)}...
-                  </p>
-                  <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      <UsersIcon className="h-4 w-4 mr-2" />
-                      <span>
-                        Teacher: {course.teachers[0]?.fullName || 'Unassigned'}
-                      </span>
-                    </div>
-                    {course.enrollment && (
-                      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        <span>
-                          Enrolled:{' '}
-                          {new Date(
-                            course.enrollment.enrollmentDate
-                          ).toLocaleDateString()}
+                    <div className="flex items-center space-x-2">
+                      <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                          {course.teacherId?.fullName?.charAt(0) || 'T'}
                         </span>
-                        <br />
-                        <span>Enrollment ID: {course.enrollment._id}</span>
                       </div>
-                    )}
-                    {course.schedule &&
-                      course.schedule.map((schedule, index) => (
-                        <div
-                          key={index}
-                          className="mt-2 text-sm text-gray-500 dark:text-gray-400"
-                        >
-                          {schedule.dayOfWeek}: {schedule.startTime} -{' '}
-                          {schedule.endTime}
-                        </div>
-                      ))}
+                      <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
+                        {course.teacherId?.fullName || 'Teacher'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {course.lessons?.length || 0} lessons
+                    </div>
                   </div>
 
-                  <div className="p-4 border-t border-gray-200 dark:border-gray-600">
-                    <div className="space-y-2">
-                      {course.lessons && (
-                        <div className="text-sm">
-                          <div className="font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Lessons
-                          </div>
-                          <div className="pl-2">
-                            <div className="text-gray-600 dark:text-gray-400">
-                              Completed:{' '}
-                              {course.lessons.filter((l) => l.completed).length}{' '}
-                              / {course.lessons.length}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {course.exams && (
-                        <div className="text-sm">
-                          <div className="font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Exams
-                          </div>
-                          <div className="pl-2">
-                            {course.exams.map((exam) => (
-                              <div
-                                key={exam._id}
-                                className="flex justify-between items-center"
-                              >
-                                <span className="text-gray-600 dark:text-gray-400">
-                                  {exam.title}
-                                </span>
-                                <span
-                                  className={`text-xs px-2 py-1 rounded ${
-                                    exam.status === 'upcoming'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : exam.status === 'completed'
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-red-100 text-red-800'
-                                  }`}
-                                >
-                                  {exam.status}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={() => confirmDropCourse(course._id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                    <div className="flex justify-end">
+                      <Link
+                        href={`/student/courses/${course._id}`}
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
                       >
-                        Drop Course
-                      </button>
+                        View Course →
+                      </Link>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -552,11 +522,25 @@ export default function StudentDashboard() {
   };
 
   const DashboardStats = () => {
-    const upcomingExams = enrolledCourses.reduce((total, course) => {
-      const courseExams =
-        course.exams?.filter((exam) => exam.status === 'upcoming') || [];
-      return total + courseExams.length;
-    }, 0);
+    // Get all lessons from enrolled courses
+    const allLessons = enrolledCourses.flatMap((course) =>
+      (course.lessons || []).map((lesson) => ({
+        ...lesson,
+        courseName: course.title,
+      }))
+    );
+
+    // Sort lessons by due date
+    const sortedLessons = allLessons.sort((a, b) => 
+      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+
+    // Get upcoming lessons (not completed and due date not passed)
+    const upcomingLessons = sortedLessons.filter(
+      (lesson) => 
+        !lesson.completed && 
+        new Date(lesson.dueDate) > new Date()
+    );
 
     return (
       <div className="space-y-6">
@@ -623,132 +607,59 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Modernized Upcoming Exams and Recent Lessons Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Upcoming Exams Section */}
-          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Upcoming Exams
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {enrolledCourses.map((course) =>
-                course.exams
-                  ?.filter((exam) => exam.status === 'upcoming')
-                  .map((exam) => (
-                    <div
-                      key={exam._id}
-                      className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                            <AcademicCapIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          </div>
-                          <div>
-                            <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                              {exam.title}
-                            </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {course.title}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {new Date(exam.date).toLocaleDateString()}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {new Date(exam.date).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-              )}
-              {upcomingExams === 0 && (
-                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                  No upcoming exams
-                </div>
-              )}
-            </div>
+        {/* New Lessons Section */}
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Upcoming Lessons
+            </h2>
+            <button 
+              onClick={() => setCurrentView('lessons')}
+              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              View All
+            </button>
           </div>
 
-          {/* Recent Lessons Section */}
-          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Recent Lessons
-              </h2>
-              <button className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                View All
-              </button>
-            </div>
-            <div className="space-y-4">
-              {enrolledCourses.map((course) =>
-                course.lessons?.slice(0, 3).map((lesson) => (
-                  <div
-                    key={lesson._id}
-                    className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`p-2 rounded-lg ${
-                            lesson.completed
-                              ? 'bg-green-100 dark:bg-green-900/30'
-                              : 'bg-yellow-100 dark:bg-yellow-900/30'
-                          }`}
-                        >
-                          <BookOpenIcon
-                            className={`w-5 h-5 ${
-                              lesson.completed
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-yellow-600 dark:text-yellow-400'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {lesson.title}
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {course.title}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            lesson.completed
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                          }`}
-                        >
-                          {lesson.completed ? 'Completed' : 'Pending'}
-                        </span>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Due: {new Date(lesson.dueDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
+          <div className="space-y-4">
+            {upcomingLessons.slice(0, 3).map((lesson) => (
+              <div
+                key={lesson._id}
+                className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                      <BookOpenIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {lesson.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {lesson.courseName}
+                      </p>
                     </div>
                   </div>
-                ))
-              )}
-              {!enrolledCourses.some(
-                (course) => (course.lessons || []).length > 0
-              ) && (
-                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                  No lessons available
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(lesson.dueDate).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            ))}
+            {upcomingLessons.length === 0 && (
+              <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                No upcoming lessons
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -831,71 +742,111 @@ export default function StudentDashboard() {
   };
 
   const LessonsView = () => {
-    const allLessons = enrolledCourses.flatMap((course) =>
-      (course.lessons || []).map((lesson) => ({
-        ...lesson,
-        courseName: course.title,
-      }))
-    );
+    console.log('Enrolled Courses in LessonsView:', enrolledCourses);
+
+    const lessonsByCourse = enrolledCourses.reduce((acc, course) => {
+      console.log('Processing course:', course.title, 'Lessons:', course.lessons);
+      if (course.lessons && course.lessons.length > 0) {
+        acc[course._id] = {
+          courseName: course.title,
+          lessons: course.lessons.map((lesson: {
+            _id: string;
+            title: string;
+            content?: string;
+            dueDate: string;
+            completed: boolean;
+          }) => ({
+            ...lesson,
+            courseName: course.title,
+            courseId: course._id
+          }))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { courseName: string; lessons: any[] }>);
+
+    console.log('Grouped Lessons:', lessonsByCourse);
 
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-100 dark:border-gray-700 h-[600px] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            All Lessons
+            My Course Lessons
           </h2>
         </div>
-        <div className="space-y-4">
-          {allLessons.map((lesson) => (
-            <div
-              key={lesson._id}
-              className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-            >
+
+        <div className="space-y-8">
+          {Object.entries(lessonsByCourse).map(([courseId, { courseName, lessons }]) => (
+            <div key={courseId} className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  {courseName}
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {lessons.filter(l => l.completed).length} / {lessons.length} completed
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {lessons.map((lesson) => (
                   <div
-                    className={`p-2 rounded-lg ${
-                      lesson.completed
-                        ? 'bg-green-100 dark:bg-green-900/30'
-                        : 'bg-yellow-100 dark:bg-yellow-900/30'
-                    }`}
+                    key={lesson._id}
+                    className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
                   >
-                    <BookOpenIcon
-                      className={`w-5 h-5 ${
-                        lesson.completed
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-yellow-600 dark:text-yellow-400'
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {lesson.title}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {lesson.courseName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      lesson.completed
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    }`}
-                  >
-                    {lesson.completed ? 'Completed' : 'Pending'}
-                  </span>
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`p-2 rounded-lg ${
+                            lesson.completed
+                              ? 'bg-green-100 dark:bg-green-900/30'
+                              : 'bg-yellow-100 dark:bg-yellow-900/30'
+                          }`}
+                        >
+                          <BookOpenIcon
+                            className={`w-5 h-5 ${
+                              lesson.completed
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-yellow-600 dark:text-yellow-400'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {lesson.title}
+                          </h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {lesson.description || 'No description available'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end space-y-2">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            lesson.completed
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          }`}
+                        >
+                          {lesson.completed ? 'Completed' : 'Pending'}
+                        </span>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
           ))}
+
+          {Object.keys(lessonsByCourse).length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">
+                No lessons found in your enrolled courses.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -926,7 +877,7 @@ export default function StudentDashboard() {
     <>
       {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-3 py-3 lg:px-5 lg:pl-3">
+        <div className="px-3 py-4 lg:px-5 lg:pl-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center justify-start">
               <button
@@ -935,17 +886,24 @@ export default function StudentDashboard() {
               >
                 <Bars3Icon className="w-6 h-6" />
               </button>
-              <Link href="/student/dashboard" className="flex ms-2 md:me-24">
+              <Link href="/student/dashboard" className="flex items-center gap-2 ms-2 md:me-24">
+                <div className="bg-blue-600 text-white p-2 rounded-lg">
+                  <BookOpenIcon className="w-6 h-6" />
+                </div>
                 <span className="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
                   E-Learning Hub
                 </span>
               </Link>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-3">
+              <span className="hidden md:block text-sm font-medium text-gray-600 dark:text-gray-300">
                 Welcome, {user.username}
               </span>
-              <UserCircleIcon className="w-8 h-8 text-gray-500 dark:text-gray-400" />
+              <div className="relative group">
+                <button className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200">
+                  <UserCircleIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -957,31 +915,48 @@ export default function StudentDashboard() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } bg-white border-r border-gray-200 sm:translate-x-0 dark:bg-gray-800 dark:border-gray-700`}
       >
-        <div className="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
-          <ul className="space-y-2 font-medium">
+        <div className="h-full flex flex-col px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
+          <ul className="space-y-1 flex-1">
             {navigation.map((item) => (
               <li key={item.view}>
                 <button
                   onClick={() => setCurrentView(item.view)}
-                  className="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+                  className={`flex w-full items-center px-4 py-3 text-sm rounded-lg transition-all duration-200 gap-x-3
+                    ${
+                      currentView === item.view
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400 font-medium'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    }
+                  `}
                 >
-                  <item.icon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                  <span className="ms-3">{item.name}</span>
+                  <item.icon 
+                    className={`w-5 h-5 transition-colors duration-200
+                      ${
+                        currentView === item.view
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }
+                    `}
+                  />
+                  <span>{item.name}</span>
+                  {currentView === item.view && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                  )}
                 </button>
               </li>
             ))}
-            <li className="mt-auto">
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <ArrowLeftOnRectangleIcon className="w-5 h-5 text-red-500 transition duration-75 group-hover:text-red-700" />
-                <span className="ms-3 text-red-500 group-hover:text-red-700">
-                  Logout
-                </span>
-              </button>
-            </li>
           </ul>
+          
+          {/* Logout section */}
+          <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center px-4 py-3 text-sm rounded-lg transition-all duration-200 gap-x-3 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <ArrowLeftOnRectangleIcon className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </aside>
 

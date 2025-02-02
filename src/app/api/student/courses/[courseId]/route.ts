@@ -5,8 +5,6 @@ import Course from '@/app/models/Course';
 
 export async function GET(request: Request) {
   try {
-    await connectDB();
-    
     const token = request.headers.get('Authorization')?.split(' ')[1];
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,17 +15,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const courses = await Course.find({ isActive: true })
-      .populate('teacherId', 'fullName email username')
-      .select('title description teacherId lessons startDate isActive')
-      .lean();
+    await connectDB();
 
-    return NextResponse.json({ courses });
-  } catch (error: any) {
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch courses', details: error.message },
-      { status: 500 }
+    const courses = await Course.find(
+      {},
+      'title description schedule enrolledStudents'
     );
+
+    return NextResponse.json({
+      courses: courses.map((course) => ({
+        _id: course._id,
+        title: course.title,
+        description: course.description,
+        schedule: course.schedule,
+        enrolledStudents: course.enrolledStudents,
+      })),
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

@@ -11,6 +11,7 @@ import {
   ArrowLeftOnRectangleIcon,
   UserCircleIcon,
   BookOpenIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import Swal from 'sweetalert2';
 import CourseEditModal from '@/app/admin/components/CourseEditModal';
@@ -24,6 +25,39 @@ interface User {
   fullName?: string;
   isActive: boolean;
 }
+
+const navigation = [
+  {
+    name: 'Dashboard',
+    icon: ChartPieIcon,
+    view: 'dashboard',
+  },
+  {
+    name: 'Users',
+    icon: UsersIcon,
+    view: 'users',
+  },
+  {
+    name: 'Courses',
+    icon: BookOpenIcon,
+    view: 'courses',
+  },
+  {
+    name: 'Add Course',
+    icon: PlusIcon,
+    href: '/admin/courses/add',
+  },
+  {
+    name: 'Register Admin',
+    icon: UserPlusIcon,
+    href: '/admin/register-admin',
+  },
+  {
+    name: 'Register Teacher',
+    icon: UserPlusIcon,
+    href: '/admin/register-teacher',
+  },
+];
 
 //Cards below are for testing purposes, will add fetch soon
 export default function AdminDashboard() {
@@ -76,7 +110,10 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      console.log('Fetched courses:', data.courses);
+      
+      // Add this console.log to debug the courses data
+      console.log('Fetched courses with teacher data:', data.courses);
+      
       setCourses(data.courses);
     } catch (error: any) {
       console.error('Error fetching courses:', error);
@@ -224,11 +261,11 @@ export default function AdminDashboard() {
                       <div className="flex items-center space-x-2">
                         <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                           <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                            {course.teacherId?.fullName?.charAt(0) || 'U'}
+                            {course.teacherId ? course.teacherId.fullName.charAt(0) : 'U'}
                           </span>
                         </div>
                         <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                          {course.teacherId?.fullName || 'Unassigned'}
+                          {course.teacherId ? course.teacherId.fullName : 'Unassigned'}
                         </span>
                       </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -570,10 +607,24 @@ export default function AdminDashboard() {
     );
   };
 
+  const renderContent = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <DashboardStats />;
+      case 'users':
+        return <UsersView />;
+      case 'courses':
+        return <div>Courses View</div>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
+      {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-3 py-3 lg:px-5 lg:pl-3">
+        <div className="px-3 py-4 lg:px-5 lg:pl-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center justify-start">
               <button
@@ -582,104 +633,94 @@ export default function AdminDashboard() {
               >
                 <Bars3Icon className="w-6 h-6" />
               </button>
-              <Link href="/admin/dashboard" className="flex ms-2 md:me-24">
+              <Link href="/admin/dashboard" className="flex items-center gap-2 ms-2 md:me-24">
+                <div className="bg-blue-600 text-white p-2 rounded-lg">
+                  <BookOpenIcon className="w-6 h-6" />
+                </div>
                 <span className="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
                   E-Learning Hub
                 </span>
               </Link>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-3">
+              <span className="hidden md:block text-sm font-medium text-gray-600 dark:text-gray-300">
                 Welcome, {user.username}
               </span>
-              <UserCircleIcon className="w-8 h-8 text-gray-500 dark:text-gray-400" />
+              <div className="relative group">
+                <button className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200">
+                  <UserCircleIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </nav>
 
+      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } bg-white border-r border-gray-200 sm:translate-x-0 dark:bg-gray-800 dark:border-gray-700`}
       >
-        <div className="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
-          <ul className="space-y-2 font-medium">
-            <li>
-              <Link
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setCurrentView('dashboard');
-                }}
-                className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <ChartPieIcon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="ms-3">Dashboard</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setCurrentView('users');
-                }}
-                className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <UsersIcon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="ms-3">Users</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/register-teacher"
-                className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <UserPlusIcon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="ms-3">Register Teacher</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/register-admin"
-                className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <UserPlusIcon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="ms-3">Register Admin</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/courses/add"
-                className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <BookOpenIcon className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="ms-3">Add Course</span>
-              </Link>
-            </li>
-            <li className="mt-auto">
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-              >
-                <ArrowLeftOnRectangleIcon className="w-5 h-5 text-red-500 transition duration-75 group-hover:text-red-700" />
-                <span className="ms-3 text-red-500 group-hover:text-red-700">
-                  Logout
-                </span>
-              </button>
-            </li>
+        <div className="h-full flex flex-col px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
+          <ul className="space-y-1 flex-1">
+            {navigation.map((item) => (
+              <li key={item.view || item.href}>
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    className="flex w-full items-center px-4 py-3 text-sm rounded-lg transition-all duration-200 gap-x-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  >
+                    <item.icon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                    <span>{item.name}</span>
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => setCurrentView(item.view as string)}
+                    className={`flex w-full items-center px-4 py-3 text-sm rounded-lg transition-all duration-200 gap-x-3
+                      ${
+                        currentView === item.view
+                          ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400 font-medium'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }
+                    `}
+                  >
+                    <item.icon 
+                      className={`w-5 h-5 transition-colors duration-200
+                        ${
+                          currentView === item.view
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }
+                      `}
+                    />
+                    <span>{item.name}</span>
+                    {currentView === item.view && (
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                    )}
+                  </button>
+                )}
+              </li>
+            ))}
           </ul>
+          
+          {/* Logout section */}
+          <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center px-4 py-3 text-sm rounded-lg transition-all duration-200 gap-x-3 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <ArrowLeftOnRectangleIcon className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </aside>
 
+      {/* Main Content */}
       <div className="p-4 sm:ml-64">
         <div className="p-4 mt-14">
-          {currentView === 'dashboard' ? (
-            <DashboardStats />
-          ) : currentView === 'users' ? (
-            <UsersView />
-          ) : null}
+          {renderContent()}
         </div>
       </div>
 

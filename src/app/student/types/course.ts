@@ -1,5 +1,18 @@
 import { Enrollment } from '@/app/student/types/enrollment';
 
+interface Lesson {
+  _id: string;
+  title: string;
+  content: string;
+  dueDate: string;
+  courseId: string;
+  completed: boolean;
+  studentProgress?: Array<{
+    studentId: string;
+    completed: boolean;
+  }>;
+}
+
 export interface Course {
   _id: string;
   title: string;
@@ -22,12 +35,7 @@ export interface Course {
     username: string;
   }>;
   enrollment?: Enrollment;
-  lessons?: Array<{
-    _id: string;
-    title: string;
-    dueDate: string;
-    completed: boolean;
-  }>;
+  lessons: Lesson[];
   exams?: Array<{
     _id: string;
     title: string;

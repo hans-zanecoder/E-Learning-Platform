@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import connectDB from '@/app/lib/db';
 
 export interface IStudent extends Document {
   _id: string;
@@ -8,6 +9,7 @@ export interface IStudent extends Document {
   email: string;
   password: string;
   role: string;
+  enrolledCourses?: string[];
 }
 
 const studentSchema = new Schema<IStudent>(
@@ -47,6 +49,14 @@ studentSchema.pre('save', async function (next) {
   next();
 });
 
+// Delete the model if it exists (for development)
+if (process.env.NODE_ENV === 'development') {
+  delete mongoose.models.Student;
+}
+
 const Student =
   mongoose.models.Student || mongoose.model<IStudent>('Student', studentSchema);
 export default Student;
+
+// Make sure to call connectDB() before using the Student model
+await connectDB();

@@ -39,10 +39,10 @@ export default function Login() {
         timer: 1500,
         showConfirmButton: false,
       });
-
+      
       const redirectPath =
         data.user.role === 'teacher'
-          ? '/admin/dashboard'
+          ? '/teacher/dashboard'
           : data.user.role === 'admin'
             ? '/admin/dashboard'
             : '/student/dashboard';

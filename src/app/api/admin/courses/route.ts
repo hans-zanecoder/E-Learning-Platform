@@ -18,22 +18,17 @@ export async function GET(request: Request) {
 
     await connectDB();
 
-    // Find all courses and populate the teacherId field with teacher's fullName
+    // Find all courses and populate the teacherId field
     const courses = await Course.find()
       .populate({
         path: 'teacherId',
         select: 'fullName email username',
-        model: 'Teacher',
+        model: 'Teacher'
       })
       .exec();
 
-    courses.map((course) => {
-      console.log('Course teacher data:', course.teacherId);
-    });
-
     return NextResponse.json({ courses });
   } catch (error: any) {
-    console.error('Error fetching courses:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

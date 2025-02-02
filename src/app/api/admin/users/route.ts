@@ -1,53 +1,83 @@
 import { NextResponse } from 'next/server';
-import connectDB from '@/app/lib/db';
-import Student from '@/app/models/Student';
-import Teacher from '@/app/models/Teacher';
 import { verifyJWT } from '@/app/lib/jwt';
+import connectDB from '@/app/lib/db';
+import Teacher from '@/app/models/Teacher';
+import Student from '@/app/models/Student';
+import Admin from '@/app/models/Admin';
 
-// Get all users
-export async function GET(req: Request) {
+export async function GET(request: Request) {
   try {
-    const token = req.headers.get('Authorization')?.split(' ')[1];
+    await connectDB();
+
+    const token = request.headers.get('Authorization')?.split(' ')[1];
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const admin = await verifyJWT(token);
-    if (!admin || admin.role !== 'admin') {
+    const decoded = await verifyJWT(token);
+    if (!decoded || typeof decoded === 'string' || decoded.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
+    // Fetch users from all collections
+    const [teachers, students, admins] = await Promise.all([
+      Teacher.find({}, '-password'),
+      Student.find({}, '-password'),
+      Admin.find({}, '-password'),
+    ]);
 
-    const students = await Student.find({}, '-password');
-    const teachers = await Teacher.find({}, '-password');
+    // Combine and format users
+    const users = [
+      ...teachers.map(user => ({ ...user.toObject(), isActive: true })),
+      ...students.map(user => ({ ...user.toObject(), isActive: true })),
+      ...admins.map(user => ({ ...user.toObject(), isActive: true })),
+    ];
 
-    return NextResponse.json({ users: [...students, ...teachers] });
+    return NextResponse.json({ users });
   } catch (error: any) {
+    console.error('Error fetching users:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// Delete user
-export async function DELETE(req: Request) {
+export async function PUT(request: Request) {
   try {
-    const token = req.headers.get('Authorization')?.split(' ')[1];
+    await connectDB();
+
+    const token = request.headers.get('Authorization')?.split(' ')[1];
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const admin = await verifyJWT(token);
-    if (!admin || admin.role !== 'admin') {
+    const decoded = await verifyJWT(token);
+    if (!decoded || typeof decoded === 'string' || decoded.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { userId, role } = await req.json();
-    await connectDB();
+    const { userId, updates } = await request.json();
 
-    const Model = role === 'student' ? Student : Teacher;
-    await Model.findByIdAndDelete(userId);
+    // Find user in appropriate collection based on role
+    const collections = {
+      student: Student,
+      teacher: Teacher,
+      admin: Admin,
+    };
 
-    return NextResponse.json({ message: 'User deleted successfully' });
+    let updatedUser = null;
+    for (const Collection of Object.values(collections)) {
+      updatedUser = await Collection.findByIdAndUpdate(
+        userId,
+        { $set: updates },
+        { new: true, select: '-password' }
+      );
+      if (updatedUser) break;
+    }
+
+    if (!updatedUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ user: updatedUser });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
